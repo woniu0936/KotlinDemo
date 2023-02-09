@@ -1,7 +1,7 @@
 package coroutine
 
 import kotlinx.coroutines.*
-import java.util.Random
+import java.util.*
 import kotlin.system.measureTimeMillis
 
 fun main() {
@@ -298,7 +298,7 @@ fun Job.log() {
 fun logX(any: Any?) {
     println(
         """
-===================================
+==================${Date().toLocaleString()}=================
 $any
 Thread:${Thread.currentThread().name}
 ==================================""".trimIndent()
