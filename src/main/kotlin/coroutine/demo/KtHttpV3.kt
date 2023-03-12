@@ -2,11 +2,12 @@ package coroutine.demo
 
 import com.google.gson.Gson
 import com.google.gson.internal.`$Gson$Types`.getRawType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.channels.onSuccess
 import kotlinx.coroutines.channels.trySendBlocking
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
@@ -19,7 +20,6 @@ import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Proxy
 import java.lang.reflect.Type
 import java.util.Date
-import java.util.concurrent.Flow
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -34,6 +34,11 @@ interface Callback<T : Any> {
 }
 
 interface ApiServiceV3 {
+
+    @GET("article/list/0/json")
+    fun reposFlow(
+        @Field("author") author: String
+    ): Flow<HttpResult>
 
     @GET("article/list/0/json")
     fun repos(
@@ -182,21 +187,36 @@ object KtHttpV3 {
             .url(url)
             .build()
 
+        return when {
+            isKtCallReturn(method) -> {
+                val call = okHttpClient.newCall(request)
+                val genericReturnType = getTypeArgument(method)
+                KtCall<T>(call, gson, genericReturnType)
+            }
+            isFlowReturn(method) -> {
+                println("=================isFlowReturn===================")
+                flow<T> {
+                    val response = okHttpClient.newCall(request).execute()
 
-        return if (isKtCallReturn(method)) {
-            val call = okHttpClient.newCall(request)
-            val genericReturnType = getTypeArgument(method)
-            KtCall<T>(call, gson, genericReturnType)
-        } else {
-            val response = okHttpClient.newCall(request).execute()
+                    val genericReturnType = getTypeArgument(method)
+                    println("=================isFlowReturn===================genericReturnType: $genericReturnType")
+                    val json = response.body?.string()
+                    val result = gson.fromJson<T>(json, genericReturnType)
+                    emit(result)
+                }
+            }
+            else -> {
+                val response = okHttpClient.newCall(request).execute()
 
-            val genericReturnType = method.genericReturnType
-            val json = response.body?.string()
-            println("====================================")
-            println("$json")
-            println("====================================")
-            gson.fromJson<Any?>(json, genericReturnType)
+                val genericReturnType = method.genericReturnType
+                val json = response.body?.string()
+                println("====================================")
+                println("$json")
+                println("====================================")
+                gson.fromJson<Any?>(json, genericReturnType)
+            }
         }
+
     }
 
     private fun getTypeArgument(method: Method) =
@@ -205,17 +225,44 @@ object KtHttpV3 {
     private fun isKtCallReturn(method: Method) =
         getRawType(method.genericReturnType) == KtCall::class.java
 
+    private fun isFlowReturn(method: Method) =
+        getRawType(method.genericReturnType) == Flow::class.java
+
 
 }
 
 fun main() {
 //    testSync()
-    testAsync()
+//    testAsync()
+    testFlow()
 }
 
 fun mainCoroutine() = runBlocking {
     val api: ApiServiceV3 = KtHttpV3.create(ApiServiceV3::class.java)
     val result = api.repos("郭霖").await()
+    api.repos("郭霖")
+        .asFlow()
+        .flowOn(Dispatchers.IO)
+        .catch {
+            println("catch: $it")
+        }
+        .collect{
+            println("test Flow result: $it")
+        }
+
+}
+
+fun testFlow()  = runBlocking {
+    KtHttpV3.create(ApiServiceV3::class.java)
+        .reposFlow("郭霖")
+        .flowOn(Dispatchers.IO)
+        .catch {
+            println("catch: $it")
+        }
+        .collect{
+            println("test Flow result: $it")
+        }
+
 }
 
 private fun testSync() {
