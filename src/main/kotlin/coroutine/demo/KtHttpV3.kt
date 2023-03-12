@@ -2,6 +2,12 @@ package coroutine.demo
 
 import com.google.gson.Gson
 import com.google.gson.internal.`$Gson$Types`.getRawType
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.onFailure
+import kotlinx.coroutines.channels.onSuccess
+import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.OkHttpClient
@@ -13,6 +19,7 @@ import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Proxy
 import java.lang.reflect.Type
 import java.util.Date
+import java.util.concurrent.Flow
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -100,6 +107,32 @@ suspend fun <T : Any> KtCall<T>.await(): T = suspendCancellableCoroutine { conti
     }
 }
 
+/**
+ * 通过给KtCall添加扩展函数，将其结果转换成一个flow
+ */
+fun <T : Any> KtCall<T>.asFlow() = callbackFlow<T> {
+    val call = call(object : Callback<T> {
+
+        override fun onSuccess(data: T) {
+//            trySend(data)
+            //trySendBlocking相比trySend，当管道容量已经满了的时候，会等待管道空闲之后再返回成功
+            //这里的onSuccess和onFailure不可获取，因为我们要close，否则调用完trySendBlocking，我们的程序不会退出
+            trySendBlocking(data)
+                .onSuccess { close() }
+                .onFailure { close(it) }
+        }
+
+        override fun onFailed(throwable: Throwable) {
+            close(throwable)
+        }
+
+    })
+
+    awaitClose {
+        call.cancel()
+    }
+}
+
 object KtHttpV3 {
 
     private var okHttpClient: OkHttpClient = OkHttpClient()
@@ -178,6 +211,11 @@ object KtHttpV3 {
 fun main() {
 //    testSync()
     testAsync()
+}
+
+fun mainCoroutine() = runBlocking {
+    val api: ApiServiceV3 = KtHttpV3.create(ApiServiceV3::class.java)
+    val result = api.repos("郭霖").await()
 }
 
 private fun testSync() {
