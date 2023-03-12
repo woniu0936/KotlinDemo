@@ -1,4 +1,4 @@
-package coroutine.demo
+package coroutine.demo.http
 
 import com.google.gson.Gson
 import com.google.gson.internal.`$Gson$Types`.getRawType
@@ -19,10 +19,8 @@ import java.io.IOException
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Proxy
 import java.lang.reflect.Type
-import java.util.Date
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
 
 
 interface Callback<T : Any> {

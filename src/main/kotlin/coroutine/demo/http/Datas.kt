@@ -1,4 +1,4 @@
-package coroutine.demo
+package coroutine.demo.http
 
 data class RepoList(
     var count: Int?,

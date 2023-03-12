@@ -1,4 +1,4 @@
-package coroutine.demo
+package coroutine.demo.http
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.RUNTIME)
